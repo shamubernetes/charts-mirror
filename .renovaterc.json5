@@ -1,0 +1,35 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["github>shamubernetes/renovate-config"],
+  customManagers: [
+    {
+      customType: "regex",
+      description: ["Process Helm-sourced charts"],
+      managerFilePatterns: ["/(^|/)metadata\\.ya?ml$/"],
+      matchStrings: [
+        "artifactName:\\s+(?<artifactName>\\S+)\\s+source:\\s+helm:\\s+registry:\\s+(?<registryUrl>\\S+)\\s+version:\\s+[\\\"']?(?<currentValue>[^\\s\\\"']+)[\\\"']?(?:\\s+chart:\\s+(?<chart>\\S+))?",
+      ],
+      datasourceTemplate: "helm",
+      depNameTemplate: "{{#if chart}}{{chart}}{{else}}{{artifactName}}{{/if}}",
+    },
+    {
+      customType: "regex",
+      description: ["Process git-sourced charts"],
+      managerFilePatterns: ["/(^|/)metadata\\.ya?ml$/"],
+      matchStrings: [
+        "source:\\s+git:\\s+repository:\\s+(?<depName>\\S+)\\s+path:\\s+\\S+\\s+tag:\\s+(?<currentValue>\\S+)",
+      ],
+      datasourceTemplate: "git-tags",
+      versioningTemplate: "semver-coerced",
+    },
+  ],
+  packageRules: [
+    {
+      description: "Auto-merge mirrored charts",
+      matchDatasources: ["helm", "git-tags"],
+      automerge: true,
+      matchUpdateTypes: ["major", "minor", "patch"],
+      ignoreTests: false,
+    },
+  ],
+}

@@ -1,0 +1,106 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Release
+
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "apps/**/metadata.yaml"
+  workflow_dispatch:
+    inputs:
+      chartName:
+        type: string
+        description: Chart Name
+        required: true
+      release:
+        type: boolean
+        description: Release
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      changed-files: ${{ steps.changed-files.outputs.changed_files }}
+    steps:
+      - name: Get Changed Files
+        id: changed-files
+        uses: bjw-s-labs/action-changed-files@a9a36fb08ce06db9b02fbd8026cc2c0945eb9841 # v0.6.0
+        with:
+          patterns: apps/**/metadata.yaml
+
+  changed:
+    if: ${{ needs.prepare.outputs.changed-files != '[]' || github.event_name == 'workflow_dispatch' }}
+    needs:
+      - "prepare"
+    name: Get Changed Apps
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      apps: ${{ steps.apps.outputs.apps }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Extract App Values
+        id: apps
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGED_FILES_JSON: ${{ needs.prepare.outputs.changed-files }}
+          CHART_NAME: ${{ inputs.chartName }}
+        run: |
+          if [[ "${EVENT_NAME}" != "workflow_dispatch" ]]; then
+            apps=$(jq -r '. | join(" ")' <<< "$CHANGED_FILES_JSON")
+          else
+            apps="apps/${CHART_NAME}/metadata.yaml"
+          fi
+          apps=$(yq eval-all --indent=0 --output-format=json "[.]" $apps)
+          echo "apps=${apps}" >> "$GITHUB_OUTPUT"
+
+  build:
+    if: ${{ needs.changed.outputs.apps != '[]' }}
+    needs:
+      - "changed"
+    name: Build ${{ matrix.app.artifactName }}
+    uses: ./.github/workflows/app-builder.yaml
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+    strategy:
+      matrix:
+        app: ${{ fromJSON(needs.changed.outputs.apps) }}
+      fail-fast: false
+      max-parallel: 4
+    with:
+      artifactName: ${{ matrix.app.artifactName }}
+      source: ${{ toJSON(matrix.app.source) }}
+      release: ${{ github.event_name == 'workflow_dispatch' && inputs.release || github.event_name == 'push' }}
+
+  status:
+    if: ${{ !cancelled() }}
+    needs:
+      - "build"
+    name: Build Success
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Any jobs failed?
+        if: ${{ contains(needs.*.result, 'failure') }}
+        run: exit 1
+
+      - name: All jobs passed or skipped?
+        if: ${{ !(contains(needs.*.result, 'failure')) }}
+        run: echo "All jobs passed or skipped" && echo "${{ toJSON(needs.*.result) }}"
