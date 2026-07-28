@@ -25,11 +25,22 @@
   ],
   packageRules: [
     {
-      description: "Auto-merge mirrored charts",
+      description: "Use integer versioning for Kuberhealthy chart revisions",
+      matchDatasources: ["helm"],
+      matchPackageNames: ["kuberhealthy"],
+      versioning: "regex:^(?<major>\\d+)$",
+    },
+    {
+      description: "Do not digest-pin mise-managed tools",
+      matchManagers: ["mise"],
+      pinDigests: false,
+    },
+    {
+      description: "Open mirrored chart updates for review",
       matchDatasources: ["helm", "git-tags"],
-      automerge: true,
-      matchUpdateTypes: ["major", "minor", "patch"],
-      ignoreTests: false,
+      automerge: false,
+      prCreation: "immediate",
+      prHourlyLimit: 0,
     },
   ],
 }
