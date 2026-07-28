@@ -1,0 +1,6 @@
+---
+artifactName: kuberhealthy
+source:
+  helm:
+    registry: https://kuberhealthy.github.io/kuberhealthy/helm-repos
+    version: "104"
