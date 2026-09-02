@@ -3,4 +3,4 @@ artifactName: plane-enterprise
 source:
   helm:
     registry: https://helm.plane.so/
-    version: 2.6.1
+    version: 3.5.7
